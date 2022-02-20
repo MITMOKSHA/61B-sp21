@@ -19,14 +19,46 @@ public class BSTMap<K extends Comparable, V> implements Map61B<K, V>{
             this.size = size;
         }
     }
+
+    private void clear(BSTNode x) {
+        if (x.left == null && x.right == null) {  // leaf node
+            x.size--;
+            return;
+        }
+        if (x.left != null) {
+            clear(x.left);
+        }
+        if (x.right != null) {
+            clear(x.right);
+        }
+    }
+
     @Override
     public void clear() {
+        root.size = 0;
+        root = null;
+    }
 
+    private boolean containsKey(BSTNode x, K key) {
+        if (key == null) {
+            throw new IllegalArgumentException("calls containsKey with a null key");
+        }
+        if (x == null) {
+            return false;
+        }
+        int cmp = key.compareTo(x.key);
+        if (cmp < 0) {
+            return containsKey(x.left, key);
+        } else if (cmp > 0) {
+            return containsKey(x.right, key);
+        } else {
+            return true;
+        }
     }
 
     @Override
     public boolean containsKey(K key) {
-        return false;
+        return containsKey(root, key);
     }
 
     private V get(BSTNode x, K key) {
@@ -85,17 +117,26 @@ public class BSTMap<K extends Comparable, V> implements Map61B<K, V>{
         if (key == null) {
             throw new IllegalArgumentException("calls put() with a null key");
         }
-        if (val == null) {
-            return;
-        }
         root = put(root, key, val);
+    }
+
+    private void printInOrder(BSTNode x) {
+        if (x.left == null && x.right == null) {
+            System.out.println(x.val);
+        }
+        if (x.left != null) {
+            printInOrder(x.left);
+        }
+        if (x.right != null) {
+            printInOrder(x.right);
+        }
     }
 
     /**
      *  prints out BSTMap in order of increasing Key
      */
     public void printInOrder() {
-
+        printInOrder(root);
     }
 
     @Override
