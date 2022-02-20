@@ -6,7 +6,7 @@ import org.w3c.dom.Node;
 import java.util.Iterator;
 import java.util.Set;
 
-public class BSTMap<K extends Comparable, V> implements Map61B<K, V>{
+public class BSTMap<K extends Comparable<K>, V> implements Map61B<K, V>{
     private BSTNode root;
     private class BSTNode {
         private K key;            // sorted by key
@@ -150,8 +150,8 @@ public class BSTMap<K extends Comparable, V> implements Map61B<K, V>{
     }
 
     @Override
-    public Iterator iterator() {
-        return (Iterator) new UnsupportedOperationException();
+    public Iterator<K> iterator() {
+        return (Iterator<K>) new UnsupportedOperationException();
     }
 
     @Override
