@@ -3,6 +3,8 @@ package bstmap;
 import edu.princeton.cs.algs4.BST;
 import org.w3c.dom.Node;
 
+import java.security.Key;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -139,9 +141,62 @@ public class BSTMap<K extends Comparable<K>, V> implements Map61B<K, V>{
         printInOrder(root);
     }
 
+    public BSTNode deleteMin(BSTNode x) {
+        if (x.left == null) return x.right;
+        x.left = deleteMin(x.left);
+        x.size = size(x.left) + size(x.right) + 1;
+        return x;
+    }
+
+    /**
+     *
+     * @param x
+     * @return the smallest key in the symbol table.
+     */
+    public BSTNode Min(BSTNode x) {
+        if (x.left == null)
+            return x;
+        else
+            return Min(x.left);
+    }
+
+    /**
+     *
+     * @param x
+     * @param key
+     * @return subtree deleted key associated value.
+     */
+    private BSTNode remove(BSTNode x, K key) {
+        if (x == null) {
+            return null;
+        }
+        int cmp = key.compareTo(x.key);
+        if (cmp < 0) {
+            x.left = remove(x.left, key);
+        } else if (cmp > 0) {
+            x.right = remove(x.right, key);
+        } else {
+            // case children is 0 or 1.
+            if (x.right == null) return x.left;
+            if (x.left == null) return x.right;
+            // case children is 2.
+            BSTNode t = x;
+            x = Min(t.right);
+            x.right = deleteMin(t.right);
+            x.left = t.left;
+        }
+        x.size = size(x.left) + size(x.right) + 1;
+        return x;
+    }
+
     @Override
     public V remove(K key) {
-        return (V) new UnsupportedOperationException();
+        if (key == null) {
+            throw new IllegalArgumentException("calls put() with a null key");
+        }
+        V delVal = get(key);
+        root = remove(root, key);
+        return delVal;
     }
 
     @Override
