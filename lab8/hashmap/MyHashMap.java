@@ -1,6 +1,5 @@
 package hashmap;
 
-import java.sql.Connection;
 import java.util.*;
 
 /**
@@ -33,7 +32,7 @@ public class MyHashMap<K, V> implements Map61B<K, V> {
     private double loadFactor;
     private int items;
     private void resize() {  // resize hash capacity.
-        Collection<Node>[] newBuckets = new Collection[2*buckets.length];
+        Collection<Node>[] newBuckets = new Collection[2 * buckets.length];
         for (int i = 0; i < buckets.length; ++i) {
             newBuckets[i] = buckets[i];
         }
@@ -111,7 +110,7 @@ public class MyHashMap<K, V> implements Map61B<K, V> {
         return new Collection[tableSize];
     }
 
-    // TODO: Implement the methods of the Map61B Interface below
+    // Implement the methods of the Map61B Interface below
     // Your code won't compile until you do so!
 
     @Override
@@ -168,7 +167,7 @@ public class MyHashMap<K, V> implements Map61B<K, V> {
         if (key == null) {
             return;
         }
-        if (Double.valueOf(items)/Double.valueOf(buckets.length) >= loadFactor) {
+        if (Double.valueOf(items) / Double.valueOf(buckets.length) >= loadFactor) {
             resize();
         }
         int index = Math.floorMod(key.hashCode(), buckets.length);
