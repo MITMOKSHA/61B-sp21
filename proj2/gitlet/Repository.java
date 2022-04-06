@@ -2,9 +2,13 @@ package gitlet;
 
 import org.junit.Test;
 
+import javax.print.DocFlavor;
+import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.TreeMap;
 
 import static gitlet.Utils.*;
@@ -15,8 +19,9 @@ import static gitlet.Utils.*;
  *  TODO: It's a good idea to give a description here of what else this Class
  *  does at a high level.
  *
- *  @author TODO
+ *  @author Moksha
  */
+
 public class Repository {
     /**
      * TODO: add instance variables here.
@@ -30,9 +35,10 @@ public class Repository {
     public static final File CWD = new File(System.getProperty("user.dir"));
     /** The .gitlet directory. */
     public static final File GITLET_DIR = join(CWD, ".gitlet");
-    public static final File GITREFSHEADS_DIR = join(CWD, "refs/heads");
-    public static final File GITOBJECTS_DIR = join(CWD, "objects");
-    public static Commit commitListHead;
+    public static final File GITHEADS_DIR = join(GITLET_DIR, "heads");
+    public static final File GITSTAGEAREA = join(GITLET_DIR, "stage");
+    public static final File GITOBJECTS_DIR = join(GITLET_DIR, "objects");
+    public static TreeMap<String, String> stageArea = new TreeMap<>();  // stage area.
 
     /* TODO: fill in the rest of this class. */
     public static void init() {
@@ -40,20 +46,94 @@ public class Repository {
             System.out.println("A Gitlet version-control system already exists in the current directory.");
             System.exit(0);
         }
-        GITLET_DIR.mkdir();
-        GITREFSHEADS_DIR.mkdir();
-        File master = join(GITREFSHEADS_DIR, "master"); // read the sha-1 string value of branch master into refs/master
-        commitListHead = new Commit("initial commit", null, sha1(serialize(master)), null);
+        GITLET_DIR.mkdir();  // Create .gitlet directory
+        GITHEADS_DIR.mkdir();  // Create head pointer(branch).
+
+        File master = join(GITHEADS_DIR, "master"); // Read the sha-1 string value of branch master into refs/master
+        Commit m = new Commit("initial commit", stageArea, null, null);
+        // serialize the object to byte stream and store it into master file.
+        writeObject(master, m);
+        String shaId = m.getOwnRef();
+
+        File commitObject = join(GITOBJECTS_DIR);
+        commitObject.mkdir();
+        File commitObjectFile = join(commitObject, shaId);
+        writeObject(commitObjectFile, m);  // serialize the commit to object/ directory.
+
+        writeObject(GITSTAGEAREA, stageArea);
     }
 
     public static void add(String filename) {
-        File in = join(GITLET_DIR, filename);
+        File in = join(CWD, filename);
         if (!in.exists()) {
             System.out.println("File does not exist.");
         }
-        File stage = join(GITLET_DIR, "stage");
-        if (stage.exists()) {
+        String blobId = sha1(serialize(in));
+        // deserialize the byte stream to Commit object and align to master object.
+        Commit master = readObject(join(GITHEADS_DIR, "master"), Commit.class);
+        stageArea = readObject(GITSTAGEAREA, TreeMap.class);
+        // If reference of blob is same as reference of commit.
+        if (blobId.equals(master.getOwnRef())) {
+            // If the blob is contained in stage area, remove it from stage area.
+            if (stageArea.containsKey(blobId)) {
+                stageArea.remove(blobId);
+            }
+        } else {
+            //  Otherwise, add the mapping filename to blob into stage area.
+            stageArea.put(blobId, filename);
+        }
+        // Write back to .gitlet/stage file.
+        writeObject(GITSTAGEAREA, stageArea);
+    }
 
+    public static void commit(String message) {
+        // read stage file
+        stageArea = readObject(GITSTAGEAREA, TreeMap.class);
+        // If no files have been staged, print message and abort.
+        if (stageArea.isEmpty()) {
+            System.out.println("No changes added to the commit.");
+            System.exit(0);
+        }
+        if (message.isBlank()) {
+            System.out.println("Please enter a commit message.");
+            return;
+        }
+
+        // Clear stage area after commit.
+        Commit newCommit = new Commit(message, stageArea, null, null);
+        Commit master = readObject(join(GITHEADS_DIR, "master"), Commit.class);
+        master.setParentRef(newCommit);  // link.
+        // update master Object then write back to master file.
+        master = newCommit;
+
+        // update master file(head pointer).
+        writeObject(join(GITHEADS_DIR, "master"), master);
+
+        // add commit object to object file.
+        String shaId = newCommit.getOwnRef();
+        writeObject(join(GITOBJECTS_DIR, shaId), newCommit);
+        stageArea.clear();
+        // update stage area.
+        writeObject(GITSTAGEAREA, stageArea);
+    }
+
+    public static void rm(String filename) {
+        stageArea = readObject(GITSTAGEAREA, TreeMap.class);
+        Commit master = readObject(join(GITHEADS_DIR, "master"), Commit.class);
+        File in = join(CWD, filename);
+        // get file sha-1 id.
+        String blobId = sha1(serialize(in));
+        if (stageArea.containsKey(blobId)) {
+            stageArea.remove(blobId);  // Remove the blob from stage area.
+            // update stageArea.
+            writeObject(GITSTAGEAREA, stageArea);
+        } else {
+            // If the file is not tracked by the head commit, print error message.
+            if (!master.getStageArea().containsKey(blobId)) {
+                System.out.println("No reason to remove the file.");
+                System.exit(0);
+            }
         }
     }
+
 }

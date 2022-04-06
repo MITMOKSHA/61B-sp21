@@ -31,27 +31,39 @@ public class Commit implements Serializable{
     /** The message of this Commit. */
     private String message;
     private String timeStamp;
-    private TreeMap<String, String> blobMapToFileName;  // map file content to Sha-1.
+    private TreeMap<String, String> blobMapToFileName;  // map file obj to Sha-1.
     private String ownRef;         // string represents sha-1 hash string.
     private String parentRef;
     private String secondParentRef;
 
     /* TODO: fill in the rest of this class. */
-    public Commit(String message, TreeMap<String, String> blobs,
+    public Commit(String message, TreeMap<String, String> stageArea,
                   String parentRef, String secondParentRef) {
         LocalDateTime current = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         this.message = message;
         this.timeStamp = current.format(formatter);
-        this.blobMapToFileName = blobs;
+        this.blobMapToFileName = stageArea;
         this.parentRef = parentRef;
         this.secondParentRef = secondParentRef;
         this.ownRef = Utils.sha1(Utils.serialize(this));
     }
 
+    public Commit() {
+        this.message = null;
+        this.timeStamp = null;
+        this.blobMapToFileName = null;
+        this.parentRef = null;
+        this.secondParentRef = null;
+        this.ownRef = null;
+    }
+
     public String getOwnRef() {
         return ownRef;
     }
+
+    // set current commit parentRef as m.parentRef
+    public String setParentRef(Commit m) { return this.parentRef = m.parentRef; }
 
     public String getParentRef() {
         return parentRef;
@@ -61,7 +73,7 @@ public class Commit implements Serializable{
         return secondParentRef;
     }
 
-    public TreeMap<String, String> getBlobsMap() {
+    public TreeMap<String, String> getStageArea() {
         return blobMapToFileName;
     }
 
