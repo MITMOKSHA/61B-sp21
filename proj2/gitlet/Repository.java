@@ -7,10 +7,12 @@ import javax.print.DocFlavor;
 import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
+import java.io.Writer;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
 
 import static gitlet.Utils.*;
@@ -41,6 +43,8 @@ public class Repository {
     public static final File GITSTAGEAREA = join(GITLET_DIR, "stage");
     public static final File GITOBJECTS_DIR = join(GITLET_DIR, "objects");
     public static final File GIT_REMOVE_TRACK = join(GITLET_DIR, "removedTrack");
+    // TODO refines branch dir.
+    public static final File GIT_BRANCH_DIR = join(GITLET_DIR, "branches");
     public static TreeMap<String, String> stageArea = new TreeMap<>();  // stage area.
 
     /* TODO: fill in the rest of this class. */
@@ -51,10 +55,18 @@ public class Repository {
         }
         GITLET_DIR.mkdir();  // Create .gitlet directory
         GITHEADS_DIR.mkdir();  // Create head pointer(branch).
+        // TODO
+        GIT_BRANCH_DIR.mkdir();  // Create branches directory.
 
         File master = join(GITHEADS_DIR, "master"); // Read the sha-1 string value of branch master into refs/master
         Commit m = new Commit("initial commit", stageArea, null, null);
         // serialize the object to byte stream and store it into master file.
+        writeObject(master, m);
+
+        // TODO
+        File masterInBranches = join(GIT_BRANCH_DIR, "master");
+        writeObject(masterInBranches, m);
+
         writeObject(master, m);
         String shaId = m.getOwnRef();
 
@@ -73,13 +85,22 @@ public class Repository {
         File in = join(CWD, filename);
         if (!in.exists()) {
             System.out.println("File does not exist.");
+            System.exit(0);
         }
         String blobId = sha1(serialize(in));
         // deserialize the byte stream to Commit object and align to master object.
         Commit master = readObject(join(GITHEADS_DIR, "master"), Commit.class);
         stageArea = readObject(GITSTAGEAREA, TreeMap.class);
-        // If reference of blob is same as reference of commit.
-        if (blobId.equals(master.getOwnRef())) {
+
+        TreeMap<String, String> removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
+        // If current added file is in the removed sets, it will not be stored in removed sets.
+        if (removedSets.containsKey(blobId)) {
+            removedSets.remove(blobId);
+        }
+        writeObject(GIT_REMOVE_TRACK, removedSets);
+
+        // If the current working version of the file is identical to the version in the current commit
+        if (master.getTrack().containsKey(blobId)) {
             // If the blob is contained in stage area, remove it from stage area.
             if (stageArea.containsKey(blobId)) {
                 stageArea.remove(blobId);
@@ -211,5 +232,41 @@ public class Repository {
         if (!exist) {
             System.out.println("Found no commit with that message.");
         }
+    }
+
+    @SuppressWarnings("unchecked")  // ignore warning
+    public static void status() {
+        System.out.println("=== Branches ===");
+        // plainFilesIn function return lexicographic order.
+        List<String> branches = plainFilenamesIn(GIT_BRANCH_DIR);
+        String head = plainFilenamesIn(GITHEADS_DIR).get(0);
+        for (String branch : branches) {
+            // If head.
+            if (head.equals(branch)) {
+                System.out.println("*" + branch);
+            } else {
+                System.out.println(branch);
+            }
+        }
+        System.out.println();
+        System.out.println("=== Staged Files ===");
+        TreeMap<String, String> stagedFiles = readObject(GITSTAGEAREA, TreeMap.class);
+        for (Map.Entry<String, String> entry : stagedFiles.entrySet()) {
+            // Print filename.
+            System.out.println(entry.getValue());
+        }
+        System.out.println();
+        System.out.println("=== Removed Files ===");
+        TreeMap<String, String> removedFiles = readObject(GIT_REMOVE_TRACK, TreeMap.class);
+        for (Map.Entry<String, String> entry : removedFiles.entrySet()) {
+            // Print filename.
+            System.out.println(entry.getValue());
+        }
+        System.out.println();
+        // TODO add "Modifications Not Staged For Commit" and "Untracked Files" information.
+        System.out.println("=== Modifications Not Staged For Commit ===");
+        System.out.println();
+        System.out.println("=== Untracked Files ===");
+        System.out.println();
     }
 }
