@@ -102,7 +102,7 @@ public class Repository {
         // Clear stage area after commit.
         Commit newCommit = new Commit(message, stageArea, null, null);
         Commit master = readObject(join(GITHEADS_DIR, "master"), Commit.class);
-        master.setParentRef(newCommit);  // link.
+        newCommit.setParentRef(master.getOwnRef());  // set current commit as the new commit parent.
         // update master Object then write back to master file.
         master = newCommit;
 
@@ -136,4 +136,20 @@ public class Repository {
         }
     }
 
+    public static void log() {
+        Commit master = readObject(join(GITHEADS_DIR, "master"), Commit.class);
+        while (true) {
+            System.out.println("===");
+            System.out.println("commit " + master.getOwnRef());
+            System.out.println("Date: " + master.getTimeStamp());
+            System.out.println(master.getMessage());
+            String shaId = master.getParentRef();
+            // If parent of current commit object not exist, quit print log.
+            if (shaId == null) {
+                break;
+            }
+            File commitObjectFile = join(GITOBJECTS_DIR, shaId);
+            master = readObject(commitObjectFile, Commit.class);
+        }
+    }
 }

@@ -7,6 +7,7 @@ import jdk.jshell.execution.Util;
 import java.io.Serializable;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Date; // TODO: You'll likely use this in this class
 import java.util.SimpleTimeZone;
@@ -39,10 +40,14 @@ public class Commit implements Serializable{
     /* TODO: fill in the rest of this class. */
     public Commit(String message, TreeMap<String, String> stageArea,
                   String parentRef, String secondParentRef) {
-        LocalDateTime current = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+//        LocalDateTime current = LocalDateTime.now();
+//        UTC
+//        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        // PST
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss yyyy Z");
+//        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss yyyy Z");
         this.message = message;
-        this.timeStamp = current.format(formatter);
+        this.timeStamp = ZonedDateTime.now().format(formatter);
         this.blobMapToFileName = stageArea;
         this.parentRef = parentRef;
         this.secondParentRef = secondParentRef;
@@ -63,7 +68,7 @@ public class Commit implements Serializable{
     }
 
     // set current commit parentRef as m.parentRef
-    public String setParentRef(Commit m) { return this.parentRef = m.parentRef; }
+    public String setParentRef(String Ref) { return this.parentRef = Ref; }
 
     public String getParentRef() {
         return parentRef;
