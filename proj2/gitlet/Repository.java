@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.TreeMap;
 
 import static gitlet.Utils.*;
@@ -150,6 +151,18 @@ public class Repository {
             }
             File commitObjectFile = join(GITOBJECTS_DIR, shaId);
             master = readObject(commitObjectFile, Commit.class);
+        }
+    }
+
+    public static void globalLog() {
+        List<String> commitList = plainFilenamesIn(GITOBJECTS_DIR);
+        for (String commitId : commitList) {
+            // Get commit object.
+            Commit m = readObject(join(GITOBJECTS_DIR, commitId), Commit.class);
+            System.out.println("===");
+            System.out.println("commit " + m.getOwnRef());
+            System.out.println("Date: " + m.getTimeStamp());
+            System.out.println(m.getMessage());
         }
     }
 }
