@@ -2,6 +2,7 @@ package gitlet;
 
 // TODO: any imports you need here
 
+import edu.princeton.cs.algs4.ST;
 import jdk.jshell.execution.Util;
 
 import java.io.Serializable;
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Date; // TODO: You'll likely use this in this class
+import java.util.Map;
 import java.util.SimpleTimeZone;
 import java.util.TreeMap;
 
@@ -68,7 +70,19 @@ public class Commit implements Serializable{
     }
 
     // set current commit parentRef as m.parentRef
-    public String setParentRef(String Ref) { return this.parentRef = Ref; }
+    public void setParentRef(String Ref) { this.parentRef = Ref; }
+
+    public void addPreviousCommitTrack(TreeMap<String, String> previousCommitTrack) {
+        for (Map.Entry<String, String> entry : previousCommitTrack.entrySet()) {
+            this.blobMapToFileName.put(entry.getKey(), entry.getValue());
+        }
+    }
+
+    public void removeTracks(TreeMap<String, String> TracksToRemove) {
+        for (Map.Entry<String, String> entry : TracksToRemove.entrySet()) {
+            this.blobMapToFileName.remove(entry.getKey());
+        }
+    }
 
     public String getParentRef() {
         return parentRef;
@@ -78,7 +92,7 @@ public class Commit implements Serializable{
         return secondParentRef;
     }
 
-    public TreeMap<String, String> getStageArea() {
+    public TreeMap<String, String> getTrack() {
         return blobMapToFileName;
     }
 

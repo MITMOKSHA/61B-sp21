@@ -1,5 +1,6 @@
 package gitlet;
 
+import edu.princeton.cs.algs4.ST;
 import org.junit.Test;
 
 import javax.print.DocFlavor;
@@ -39,6 +40,7 @@ public class Repository {
     public static final File GITHEADS_DIR = join(GITLET_DIR, "heads");
     public static final File GITSTAGEAREA = join(GITLET_DIR, "stage");
     public static final File GITOBJECTS_DIR = join(GITLET_DIR, "objects");
+    public static final File GIT_REMOVE_TRACK = join(GITLET_DIR, "removedTrack");
     public static TreeMap<String, String> stageArea = new TreeMap<>();  // stage area.
 
     /* TODO: fill in the rest of this class. */
@@ -62,8 +64,11 @@ public class Repository {
         writeObject(commitObjectFile, m);  // serialize the commit to object/ directory.
 
         writeObject(GITSTAGEAREA, stageArea);
+
+        writeObject(GIT_REMOVE_TRACK, new TreeMap<String, String>());
     }
 
+    @SuppressWarnings("unchecked")  // ignore warning
     public static void add(String filename) {
         File in = join(CWD, filename);
         if (!in.exists()) {
@@ -87,11 +92,14 @@ public class Repository {
         writeObject(GITSTAGEAREA, stageArea);
     }
 
+    @SuppressWarnings("unchecked")  // ignore warning
     public static void commit(String message) {
-        // read stage file
+        // Read removed set.
+        TreeMap<String, String> removed = readObject(GIT_REMOVE_TRACK, TreeMap.class);
+        // Read stage.
         stageArea = readObject(GITSTAGEAREA, TreeMap.class);
         // If no files have been staged, print message and abort.
-        if (stageArea.isEmpty()) {
+        if (stageArea.isEmpty() && removed.isEmpty()) {
             System.out.println("No changes added to the commit.");
             System.exit(0);
         }
@@ -100,9 +108,21 @@ public class Repository {
             return;
         }
 
-        // Clear stage area after commit.
         Commit newCommit = new Commit(message, stageArea, null, null);
         Commit master = readObject(join(GITHEADS_DIR, "master"), Commit.class);
+
+        // Add the previous commit tracks into current commit.
+        newCommit.addPreviousCommitTrack(master.getTrack());
+
+        // If removed set is not empty, remove from current Commit. And then clear it.
+        if (!removed.isEmpty()) {
+            newCommit.removeTracks(removed);
+            removed.clear();
+        }
+        // Update removed set.
+        writeObject(GIT_REMOVE_TRACK, removed);
+
+
         newCommit.setParentRef(master.getOwnRef());  // set current commit as the new commit parent.
         // update master Object then write back to master file.
         master = newCommit;
@@ -113,11 +133,13 @@ public class Repository {
         // add commit object to object file.
         String shaId = newCommit.getOwnRef();
         writeObject(join(GITOBJECTS_DIR, shaId), newCommit);
+        // Clear stage area after commit.
         stageArea.clear();
         // update stage area.
         writeObject(GITSTAGEAREA, stageArea);
     }
 
+    @SuppressWarnings("unchecked")  // ignore warning
     public static void rm(String filename) {
         stageArea = readObject(GITSTAGEAREA, TreeMap.class);
         Commit master = readObject(join(GITHEADS_DIR, "master"), Commit.class);
@@ -126,15 +148,21 @@ public class Repository {
         String blobId = sha1(serialize(in));
         if (stageArea.containsKey(blobId)) {
             stageArea.remove(blobId);  // Remove the blob from stage area.
-            // update stageArea.
-            writeObject(GITSTAGEAREA, stageArea);
         } else {
             // If the file is not tracked by the head commit, print error message.
-            if (!master.getStageArea().containsKey(blobId)) {
+            if (!master.getTrack().containsKey(blobId)) {
                 System.out.println("No reason to remove the file.");
                 System.exit(0);
+            } else {  // tracked
+                TreeMap<String, String> tracks = readObject(GIT_REMOVE_TRACK, TreeMap.class);
+                // add track to the list to be removed.
+                tracks.put(blobId, filename);
+                writeObject(GIT_REMOVE_TRACK, tracks);
+                in.delete();  // delete file
             }
         }
+        // update stageArea.
+        writeObject(GITSTAGEAREA, stageArea);
     }
 
     public static void log() {
@@ -163,6 +191,25 @@ public class Repository {
             System.out.println("commit " + m.getOwnRef());
             System.out.println("Date: " + m.getTimeStamp());
             System.out.println(m.getMessage());
+        }
+    }
+
+    public static void find(String commitMessage) {
+        List<String> commitList = plainFilenamesIn(GITOBJECTS_DIR);
+        boolean exist = false;
+        for (String commitId : commitList) {
+            // Get commit object.
+            Commit m = readObject(join(GITOBJECTS_DIR, commitId), Commit.class);
+            if (m.getMessage().equals(commitMessage)) {
+                System.out.println("===");
+                System.out.println("commit " + m.getOwnRef());
+                System.out.println("Date: " + m.getTimeStamp());
+                System.out.println(m.getMessage());
+                exist = true;
+            }
+        }
+        if (!exist) {
+            System.out.println("Found no commit with that message.");
         }
     }
 }
