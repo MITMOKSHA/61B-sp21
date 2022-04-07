@@ -199,6 +199,7 @@ public class Repository {
             System.out.println("commit " + head.getOwnRef());
             System.out.println("Date: " + head.getTimeStamp());
             System.out.println(head.getMessage());
+            System.out.println();
             String shaId = head.getParentRef();
             // If parent of current commit object not exist, quit print log.
             if (shaId == null) {
@@ -218,6 +219,7 @@ public class Repository {
             System.out.println("commit " + m.getOwnRef());
             System.out.println("Date: " + m.getTimeStamp());
             System.out.println(m.getMessage());
+            System.out.println();
         }
     }
 
@@ -232,6 +234,7 @@ public class Repository {
                 System.out.println("commit " + m.getOwnRef());
                 System.out.println("Date: " + m.getTimeStamp());
                 System.out.println(m.getMessage());
+                System.out.println();
                 exist = true;
             }
         }
