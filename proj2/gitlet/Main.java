@@ -65,6 +65,9 @@ public class Main {
             case "status":
                 Repository.status();
                 break;
+            case "checkout":
+                Repository.checkout(args);
+                break;
             default:
                 System.out.println("No command with that name exists.");
                 System.exit(0);
