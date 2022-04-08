@@ -481,7 +481,7 @@ public class Repository {
 
     public static void rmBranch(String branchName) {
         List<String> branchNames = plainFilenamesIn(GIT_BRANCH_DIR);
-        String currentBranchName = plainFilenamesIn(GIT_BRANCH_DIR).get(0);
+        String currentBranchName = plainFilenamesIn(GIT_HEADS_DIR).get(0);
         if (!branchNames.contains(branchName)) {
             System.out.println("A branch with that name does not exist.");
             System.exit(0);
