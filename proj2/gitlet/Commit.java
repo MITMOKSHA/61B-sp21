@@ -72,11 +72,11 @@ public class Commit implements Serializable{
     // set current commit parentRef as m.parentRef
     public void setParentRef(String Ref) { this.parentRef = Ref; }
 
-    public void addPreviousCommitTrack(TreeMap<String, String> previousCommitTrack) {
-        for (Map.Entry<String, String> entry : previousCommitTrack.entrySet()) {
-            this.blobMapToFileName.put(entry.getKey(), entry.getValue());
-        }
-    }
+//    public void addPreviousCommitTrack(TreeMap<String, String> previousCommitTrack) {
+//        for (Map.Entry<String, String> entry : previousCommitTrack.entrySet()) {
+//            this.blobMapToFileName.put(entry.getKey(), entry.getValue());
+//        }
+//    }
 
     public void removeTracks(TreeMap<String, String> TracksToRemove) {
         for (Map.Entry<String, String> entry : TracksToRemove.entrySet()) {

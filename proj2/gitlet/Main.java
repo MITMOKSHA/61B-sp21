@@ -66,7 +66,32 @@ public class Main {
                 Repository.status();
                 break;
             case "checkout":
+                if (args.length < 2) {
+                    System.out.println("Incorrect operands.");
+                    System.exit(0);
+                }
                 Repository.checkout(args);
+                break;
+            case "branch":
+                if (args.length < 2) {
+                    System.out.println("Incorrect operands.");
+                    System.exit(0);
+                }
+                Repository.branch(args[1]);
+                break;
+            case "rm-branch":
+                if (args.length < 2) {
+                    System.out.println("Incorrect operands.");
+                    System.exit(0);
+                }
+                Repository.rmBranch(args[1]);
+                break;
+            case "reset":
+                if (args.length < 2) {
+                    System.out.println("Incorrect operands.");
+                    System.exit(0);
+                }
+                Repository.reset(args[1]);
                 break;
             default:
                 System.out.println("No command with that name exists.");
