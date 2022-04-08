@@ -2,7 +2,9 @@ package gitlet;
 
 
 import java.io.File;
-import java.util.*;
+import java.util.TreeMap;
+import java.util.List;
+import java.util.Map;
 
 import static gitlet.Utils.*;
 
@@ -328,42 +330,20 @@ public class Repository {
         // Get the tracked file of head commit object.
         stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
         blobs = readObject(GIT_BLOB, TreeMap.class);
-
-        // checkout -- fileName
-        if (args.length == 3) {
+        if (args.length == 3) {  // checkout -- fileName
             String fileName = args[2];
             if (!args[1].equals("--")) {
                 System.out.println("Incorrect operands.");
                 System.exit(0);
             }
-
-            // if file not in current commit.
-            if (!tracks.containsValue(fileName)) {
-                System.out.println("File does not exist in that commit.");
-                System.exit(0);
-            }
-
-
-            /* Traverse one file tracked by this commit to find the blobId
-            corresponding to the filename.
-             */
-            for (Map.Entry<String, String> entry : tracks.entrySet()) {
-                if (entry.getValue().equals(fileName)) {
-                    byte[] fileContentTrackedByCommit = blobs.get(entry.getKey());
-                    writeContents(join(CWD, fileName), fileContentTrackedByCommit);
-                }
-            }
-
-        // checkout commitId -- fileName
-        } else if (args.length == 4) {
+            changeWorkingDirectory(tracks, fileName);
+        } else if (args.length == 4) {  // checkout commitId -- fileName
             String commitId = args[1];
             String fileName = args[3];
-
             if (!args[2].equals("--")) {
                 System.out.println("Incorrect operands.");
                 System.exit(0);
             }
-
             List<String> commitIdNames = plainFilenamesIn(GIT_OBJECTS_DIR);
             List<String> shortIdNames = plainFilenamesIn(GIT_SHORT_ID_DIR);
             // If current commit tracks do not contain the commit id, print message.
@@ -371,13 +351,7 @@ public class Repository {
                 System.out.println("No commit with that id exists.");
                 System.exit(0);
             }
-
-            // if file not in current commit.
-            if (!tracks.containsValue(fileName)) {
-                System.out.println("File does not exist in that commit.");
-                System.exit(0);
-            }
-
+            printNotExistMessage(tracks, fileName);
             Commit concreteCommit;
             if (commitId.length() <= 8) {
                 // ShortId version.
@@ -387,21 +361,9 @@ public class Repository {
             }
             // Get the Commit object resides in commit which id is commitId.
             TreeMap<String, String> conTracks = concreteCommit.getTrack();
-
-            /* Traverse one file tracked by this commit to find the blobId
-            corresponding to the filename.
-             */
-            for (Map.Entry<String, String> entry : conTracks.entrySet()) {
-                if (entry.getValue().equals(fileName)) {
-                    byte[] fileContentTrackedByCommit = blobs.get(entry.getKey());
-                    writeContents(join(CWD, fileName), fileContentTrackedByCommit);
-                }
-            }
-
-        // checkout branchName
-        } else if (args.length == 2) {
+            changeWorkingDirectory(conTracks, fileName);
+        } else if (args.length == 2) {  // checkout branchName
             String branchName = args[1];
-
             // actually, current directory is not current commit resided directory.
             List<String> currentDirFileNames = plainFilenamesIn(CWD);
             // Do not exist such a branch in branch directory, print message.
@@ -409,15 +371,12 @@ public class Repository {
                 System.out.println("No such branch exists.");
                 System.exit(0);
             }
-
             if (currentBranchName.equals(branchName)) {
                 System.out.println("no need to checkout the current branch.");
                 System.exit(0);
             }
-
             Commit checkoutBranch = readObject(join(GIT_BRANCH_DIR, branchName), Commit.class);
             TreeMap<String, String> checkoutTracks = checkoutBranch.getTrack();
-
             // Traverse current directory files.
             for (String fileName : currentDirFileNames) {
                 File concreteFile = join(CWD, fileName);
@@ -428,38 +387,58 @@ public class Repository {
                             + "delete it, or add and commit it first.");
                     System.exit(0);
                 }
-                // TODO
                 if (!checkoutTracks.containsValue(fileName)) {
                     restrictedDelete(concreteFile);
                 }
             }
-
-            /* Traverse files tracked by this commit to find the blobId
-            corresponding to the filename.
-             */
+            // update files in working directory.
             for (Map.Entry<String, String> entry : checkoutTracks.entrySet()) {
                 String fileName = entry.getValue();
                 byte[] fileContentTrackedByCommit = blobs.get(entry.getKey());
                 writeContents(join(CWD, fileName), fileContentTrackedByCommit);
             }
-
-            // read the current head to update corresponding branch.
-            Commit head = readObject(join(GIT_HEADS_DIR, currentBranchName), Commit.class);
-            // Update branch information in branches/ dir.
-            writeObject(join(GIT_BRANCH_DIR, currentBranchName), head);
-
-            Commit branchToBeChanged = readObject(join(GIT_BRANCH_DIR, branchName), Commit.class);
-            // set the branch parameter as the head branch(e.g. head pointer).
-            writeObject(join(GIT_HEADS_DIR, branchName), branchToBeChanged);
-
-            // Delete current branch file from heads/ dir.
-            join(GIT_HEADS_DIR, currentBranchName).delete();
-
-            // clear stage Area after branch checkout.
-            stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
-            stageArea.clear();
-            writeObject(GIT_STAGE_AREA, stageArea);
+            branchSwitch(branchName, currentBranchName);
+            clearStageArea();
         }
+    }
+
+    public static void branchSwitch(String branchName, String currentBranchName) {
+        // read the current head to update corresponding branch.
+        Commit head = readObject(join(GIT_HEADS_DIR, currentBranchName), Commit.class);
+        // Update branch information in branches/ dir.
+        writeObject(join(GIT_BRANCH_DIR, currentBranchName), head);
+        Commit branchToBeChanged = readObject(join(GIT_BRANCH_DIR, branchName), Commit.class);
+        // set the branch parameter as the head branch(e.g. head pointer).
+        writeObject(join(GIT_HEADS_DIR, branchName), branchToBeChanged);
+        // Delete current branch file from heads/ dir.
+        join(GIT_HEADS_DIR, currentBranchName).delete();
+    }
+
+    public static void changeWorkingDirectory(TreeMap<String, String> tracks, String fileName) {
+        /* Traverse one file tracked by this commit to find the blobId
+        corresponding to the filename.
+         */
+        for (Map.Entry<String, String> entry : tracks.entrySet()) {
+            if (entry.getValue().equals(fileName)) {
+                byte[] fileContentTrackedByCommit = blobs.get(entry.getKey());
+                writeContents(join(CWD, fileName), fileContentTrackedByCommit);
+            }
+        }
+    }
+
+    public static void printNotExistMessage(TreeMap<String, String> tracks, String fileName) {
+        // if file not in current commit.
+        if (!tracks.containsValue(fileName)) {
+            System.out.println("File does not exist in that commit.");
+            System.exit(0);
+        }
+    }
+
+    public static void clearStageArea() {
+        // clear stage Area after branch checkout.
+        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
+        stageArea.clear();
+        writeObject(GIT_STAGE_AREA, stageArea);
     }
 
     public static void branch(String branchName) {
@@ -518,7 +497,6 @@ public class Repository {
                         + "delete it, or add and commit it first.");
                 System.exit(0);
             }
-            // TODO
             if (!tracks.containsValue(fileName)) {
                 /* delete files of current directory
                 that does not be tracked by the to be reset commit.
