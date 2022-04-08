@@ -1,30 +1,22 @@
 package gitlet;
 
-// TODO: any imports you need here
 
-import edu.princeton.cs.algs4.ST;
-import jdk.jshell.execution.Util;
 
 import java.io.Serializable;
-import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Date; // TODO: You'll likely use this in this class
 import java.util.Map;
-import java.util.SimpleTimeZone;
 import java.util.TreeMap;
 
 /** Represents a gitlet commit object.
- *  TODO: It's a good idea to give a description here of what else this Class
  *  does at a high level.
  *
  *  @author moksha
  */
 
-public class Commit implements Serializable{
+public class Commit implements Serializable {
     /**
-     * TODO: add instance variables here.
+     * add instance variables here.
      *
      * List all instance variables of the Commit class here with a useful
      * comment above them describing what that variable represents and how that
@@ -39,15 +31,13 @@ public class Commit implements Serializable{
     private String parentRef;
     private String secondParentRef;
 
-    /* TODO: fill in the rest of this class. */
+    /* fill in the rest of this class. */
     public Commit(String message, TreeMap<String, String> stageArea,
                   String parentRef, String secondParentRef) {
-//        LocalDateTime current = LocalDateTime.now();
 //        UTC
 //        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         // PST
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss yyyy Z");
-//        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss yyyy Z");
         this.message = message;
         this.timeStamp = ZonedDateTime.now().format(formatter);
         this.blobMapToFileName = stageArea;
@@ -70,16 +60,12 @@ public class Commit implements Serializable{
     }
 
     // set current commit parentRef as m.parentRef
-    public void setParentRef(String Ref) { this.parentRef = Ref; }
+    public void setParentRef(String ref) {
+        this.parentRef = ref;
+    }
 
-//    public void addPreviousCommitTrack(TreeMap<String, String> previousCommitTrack) {
-//        for (Map.Entry<String, String> entry : previousCommitTrack.entrySet()) {
-//            this.blobMapToFileName.put(entry.getKey(), entry.getValue());
-//        }
-//    }
-
-    public void removeTracks(TreeMap<String, String> TracksToRemove) {
-        for (Map.Entry<String, String> entry : TracksToRemove.entrySet()) {
+    public void removeTracks(TreeMap<String, String> tracksToRemove) {
+        for (Map.Entry<String, String> entry : tracksToRemove.entrySet()) {
             this.blobMapToFileName.remove(entry.getKey());
         }
     }

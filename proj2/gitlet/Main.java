@@ -1,10 +1,7 @@
 package gitlet;
 
-import java.io.IOException;
 
-;
 
-;
 public class Main {
 
     /** Usage: java gitlet.Main ARGS, where ARGS contains
@@ -17,9 +14,8 @@ public class Main {
             System.exit(0);
         }
         String firstArg = args[0];
-        switch(firstArg) {
+        switch (firstArg) {
             case "init":
-                // TODO: handle the `init` command
                 if (args.length > 1) {
                     System.out.println("Incorrect operands.");
                     System.exit(0);
@@ -27,17 +23,23 @@ public class Main {
                 Repository.init();
                 break;
             case "add":
-                // TODO: handle the `add [filename]` command
                 if (args.length > 2) {
                     System.out.println("Incorrect operands.");
                     System.exit(0);
                 }
+                if (!Repository.GITLET_DIR.exists()) {
+                    System.out.println("Not in an initialized Gitlet directory.");
+                    System.exit(0);
+                }
                 Repository.add(args[1]);
                 break;
-            // TODO: FILL THE REST IN
             case "commit":
                 if (args.length < 2) {
                     System.out.println("Please enter a commit message.");
+                    System.exit(0);
+                }
+                if (!Repository.GITLET_DIR.exists()) {
+                    System.out.println("Not in an initialized Gitlet directory.");
                     System.exit(0);
                 }
                 Repository.commit(args[1]);
@@ -45,6 +47,10 @@ public class Main {
             case "rm":
                 if (args.length < 2) {
                     System.out.println("Incorrect operands.");
+                    System.exit(0);
+                }
+                if (!Repository.GITLET_DIR.exists()) {
+                    System.out.println("Not in an initialized Gitlet directory.");
                     System.exit(0);
                 }
                 Repository.rm(args[1]);
@@ -60,14 +66,26 @@ public class Main {
                     System.out.println("Incorrect operands.");
                     System.exit(0);
                 }
+                if (!Repository.GITLET_DIR.exists()) {
+                    System.out.println("Not in an initialized Gitlet directory.");
+                    System.exit(0);
+                }
                 Repository.find(args[1]);
                 break;
             case "status":
+                if (!Repository.GITLET_DIR.exists()) {
+                    System.out.println("Not in an initialized Gitlet directory.");
+                    System.exit(0);
+                }
                 Repository.status();
                 break;
             case "checkout":
                 if (args.length < 2) {
                     System.out.println("Incorrect operands.");
+                    System.exit(0);
+                }
+                if (!Repository.GITLET_DIR.exists()) {
+                    System.out.println("Not in an initialized Gitlet directory.");
                     System.exit(0);
                 }
                 Repository.checkout(args);
@@ -77,6 +95,10 @@ public class Main {
                     System.out.println("Incorrect operands.");
                     System.exit(0);
                 }
+                if (!Repository.GITLET_DIR.exists()) {
+                    System.out.println("Not in an initialized Gitlet directory.");
+                    System.exit(0);
+                }
                 Repository.branch(args[1]);
                 break;
             case "rm-branch":
@@ -84,11 +106,19 @@ public class Main {
                     System.out.println("Incorrect operands.");
                     System.exit(0);
                 }
+                if (!Repository.GITLET_DIR.exists()) {
+                    System.out.println("Not in an initialized Gitlet directory.");
+                    System.exit(0);
+                }
                 Repository.rmBranch(args[1]);
                 break;
             case "reset":
                 if (args.length < 2) {
                     System.out.println("Incorrect operands.");
+                    System.exit(0);
+                }
+                if (!Repository.GITLET_DIR.exists()) {
+                    System.out.println("Not in an initialized Gitlet directory.");
                     System.exit(0);
                 }
                 Repository.reset(args[1]);
