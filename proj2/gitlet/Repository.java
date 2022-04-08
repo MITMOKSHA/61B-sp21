@@ -305,16 +305,16 @@ public class Repository {
         System.out.println();
 
         System.out.println("=== Untracked Files ===");
-        blobs = readObject(GIT_BLOB, TreeMap.class);
-        for (String fileName : filesInDir) {
-            File concreteFile = join(CWD, fileName);
-            // Untracked file will be written.
-            String blobId = sha1(fileName, readContents(concreteFile));
-            // If commit not track and not add this file to stage area.
-            if (!(blobs.containsKey(blobId) || stageArea.containsKey(blobId))) {
-                System.out.println(fileName);
-            }
-        }
+//        blobs = readObject(GIT_BLOB, TreeMap.class);
+//        for (String fileName : filesInDir) {
+//            File concreteFile = join(CWD, fileName);
+//            // Untracked file will be written.
+//            String blobId = sha1(fileName, readContents(concreteFile));
+//            // If commit not track and not add this file to stage area.
+//            if (!(blobs.containsKey(blobId) || stageArea.containsKey(blobId))) {
+//                System.out.println(fileName);
+//            }
+//        }
         System.out.println();
     }
 
@@ -403,6 +403,9 @@ public class Repository {
                 System.exit(0);
             }
 
+            Commit checkoutBranch = readObject(join(GIT_BRANCH_DIR, branchName), Commit.class);
+            TreeMap<String, String> checkoutTracks = checkoutBranch.getTrack();
+
             // Traverse current directory files.
             for (String fileName : currentDirFileNames) {
                 File concreteFile = join(CWD, fileName);
@@ -413,13 +416,13 @@ public class Repository {
                     System.exit(0);
                 }
                 // TODO
-                if (!tracks.containsValue(fileName)) {
+                if (!checkoutTracks.containsValue(fileName)) {
                     restrictedDelete(concreteFile);
                 }
             }
 
             // Traverse files tracked by this commit to find the blobId corresponding to the filename.
-            for (Map.Entry<String, String> entry : tracks.entrySet()) {
+            for (Map.Entry<String, String> entry : checkoutTracks.entrySet()) {
                 String fileName = entry.getValue();
                 byte[] fileContentTrackedByCommit = blobs.get(entry.getKey());
                 writeContents(join(CWD, fileName), fileContentTrackedByCommit);
@@ -454,11 +457,11 @@ public class Repository {
         // read the current head to update corresponding branch.
         Commit head = readObject(join(GITHEADS_DIR, currentBranchName), Commit.class);
         // Update branch information in branches/ dir.
-        writeObject(join(GIT_BRANCH_DIR, currentBranchName), head);
+//        writeObject(join(GIT_BRANCH_DIR, currentBranchName), head);
 
-        Commit newBranch = head;
+//        Commit newBranch = head;
         // create new branch.
-        writeObject(join(GIT_BRANCH_DIR, branchName), newBranch);
+        writeObject(join(GIT_BRANCH_DIR, branchName), head);
     }
 
     public static void rmBranch(String branchName) {
