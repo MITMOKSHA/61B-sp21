@@ -2,9 +2,7 @@ package gitlet;
 
 
 import java.io.File;
-import java.util.TreeMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static gitlet.Utils.*;
 
@@ -166,6 +164,8 @@ public class Repository {
 
         // update head commit file(head pointer).
         writeObject(join(GIT_HEADS_DIR, currentBranchName), head);
+        // update head commit in branches dir.
+        writeObject(join(GIT_BRANCH_DIR, currentBranchName), head);
 
         // add commit object to object file.
         String shaId = newCommit.getOwnRef();
@@ -406,7 +406,7 @@ public class Repository {
         // read the current head to update corresponding branch.
         Commit head = readObject(join(GIT_HEADS_DIR, currentBranchName), Commit.class);
         // Update branch information in branches/ dir.
-        writeObject(join(GIT_BRANCH_DIR, currentBranchName), head);
+//        writeObject(join(GIT_BRANCH_DIR, currentBranchName), head);
         Commit branchToBeChanged = readObject(join(GIT_BRANCH_DIR, branchName), Commit.class);
         // set the branch parameter as the head branch(e.g. head pointer).
         writeObject(join(GIT_HEADS_DIR, branchName), branchToBeChanged);
@@ -434,6 +434,7 @@ public class Repository {
         }
     }
 
+    @SuppressWarnings("unchecked")  // ignore warning
     public static void clearStageArea() {
         // clear stage Area after branch checkout.
         stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
@@ -524,6 +525,96 @@ public class Repository {
         stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
         stageArea.clear();
         writeObject(GIT_STAGE_AREA, stageArea);
+    }
+
+    @SuppressWarnings("unchecked")  // ignore warning
+    public static void merge(String branchName) {
+        String currBranchName = plainFilenamesIn(GIT_HEADS_DIR).get(0);
+        List<String> branchNames = plainFilenamesIn(GIT_BRANCH_DIR);
+        blobs = readObject(GIT_BLOB, TreeMap.class);
+        removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
+        if (!branchNames.contains(branchName)) {
+            System.out.println("A branch with that name does not exist.");
+            System.exit(0);
+        }
+        if (currBranchName.equals(branchName)) {
+            System.out.println("Cannot merge a branch with itself.");
+            System.exit(0);
+        }
+
+
+        Commit currBranch = readObject(join(GIT_BRANCH_DIR, currBranchName), Commit.class);
+        Commit givenBranch = readObject(join(GIT_BRANCH_DIR, branchName), Commit.class);
+        // If find split point, it will return the object otherwise return null.
+        Commit splitPoint = findSplitPoint(currBranch, givenBranch);
+        // test
+        if (splitPoint == null) {
+            System.out.println("Does not find split point.");
+            System.exit(0);
+        }
+        // TODO: If split point is given branch, print message and terminate.
+        // If the split point is the same commit as the given branch, then we do nothing
+        if (splitPoint.equals(givenBranch)) {
+            System.out.println("Given branch is an ancestor of the current branch.");
+            System.exit(0);
+        }
+        // TODO: If split point is current branch, print message and terminate.
+        if (splitPoint.equals(currBranch)) {
+            System.out.println("Current branch fast-forwarded.");
+            System.exit(0);
+        }
+        // TODO: If there are staged additions or removals present, print the error message You have uncommitted changes.
+        // TODO: If an untracked file in the current commit would be overwritten or deleted by the merge, print message.
+        // TODO: the split point was not the current branch or the given branch, merge automatically commits with the log message
+        // TODO:  if the merge encountered a conflict, print the message
+    }
+
+    public static Commit findSplitPoint(Commit currBranch, Commit givenBranch) {
+        List<String> currBranchPath = new ArrayList<>();
+        Set<String> givenBranchPath = new HashSet<>();
+
+        // Use BFS algorithm to traverse branch path.
+        Queue<Commit> que = new LinkedList<>();
+        que.add(currBranch);
+        while (!que.isEmpty()) {
+            Commit element = que.poll();  // Get the head element of queue head.
+            currBranchPath.add(element.getOwnRef());  // Add the commit alongside the path to the List.
+            if (element.getParentRef() != null) {
+                Commit parent = readObject(join(GIT_OBJECTS_DIR, element.getParentRef()),
+                        Commit.class);
+                que.add(parent);
+            }
+            if (element.getSecondParentRef() != null) {
+                Commit parent = readObject(join(GIT_OBJECTS_DIR, element.getSecondParentRef()),
+                        Commit.class);
+                que.add(parent);
+            }
+        }
+
+        que.add(givenBranch);
+        while (!que.isEmpty()) {
+            Commit element = que.poll();  // Get the head element of queue head.
+            givenBranchPath.add(element.getOwnRef());  // Add the commit alongside the path to the sets.
+            if (element.getParentRef() != null) {
+                Commit parent = readObject(join(GIT_OBJECTS_DIR, element.getParentRef()),
+                        Commit.class);
+                que.add(parent);
+            }
+            if (element.getSecondParentRef() != null) {
+                Commit parent = readObject(join(GIT_OBJECTS_DIR, element.getSecondParentRef()),
+                        Commit.class);
+                que.add(parent);
+            }
+        }
+
+        // Find split point.
+        for (String ref : currBranchPath) {
+            if (givenBranchPath.contains(ref)) {
+                // find
+                return readObject(join(GIT_OBJECTS_DIR, ref), Commit.class);
+            }
+        }
+        return null;
     }
 
 
