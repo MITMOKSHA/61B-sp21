@@ -1,8 +1,11 @@
 package gitlet;
 
 
+import com.sun.source.tree.Tree;
+
 import java.io.File;
 import java.util.*;
+import java.util.concurrent.TransferQueue;
 
 import static gitlet.Utils.*;
 
@@ -109,9 +112,10 @@ public class Repository {
             // If the blob is contained in stage area, remove it from stage area.
             if (stageArea.containsKey(blobId)) {
                 stageArea.remove(blobId);
-                blobs = readObject(GIT_BLOB, TreeMap.class);
-                blobs.remove(blobId);  // delete from blobs.
-                writeObject(GIT_BLOB, blobs);
+                // TODO
+//                blobs = readObject(GIT_BLOB, TreeMap.class);
+//                blobs.remove(blobId);  // delete from blobs.
+//                writeObject(GIT_BLOB, blobs);
             }
         } else {
             //  Otherwise, add the mapping filename to blob into stage area.
@@ -128,6 +132,11 @@ public class Repository {
 
     @SuppressWarnings("unchecked")  // ignore warning
     public static void commit(String message) {
+        commitMerge(message, null);
+    }
+
+    @SuppressWarnings("unchecked")  // ignore warning
+    public static void commitMerge(String message, String secondParentRef) {
         // Read removed set.
         removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
         // Read stage.
@@ -144,7 +153,7 @@ public class Repository {
             return;
         }
 
-        Commit newCommit = new Commit(message, stageArea, null, null);
+        Commit newCommit = new Commit(message, stageArea, null, secondParentRef);
         Commit head = readObject(join(GIT_HEADS_DIR, currentBranchName), Commit.class);
 
         // Add the previous commit tracks into current commit.
@@ -183,7 +192,7 @@ public class Repository {
         blobs = readObject(GIT_BLOB, TreeMap.class);
         Commit head = readObject(join(GIT_HEADS_DIR, plainFilenamesIn(GIT_HEADS_DIR).get(0)),
                 Commit.class);
-        Map<String, String> tracks = head.getTrack();
+        TreeMap<String, String> tracks = head.getTrack();
 
         // If the file currently in the stage area.
         if (stageArea.containsValue(filename)) {
@@ -533,6 +542,22 @@ public class Repository {
         List<String> branchNames = plainFilenamesIn(GIT_BRANCH_DIR);
         blobs = readObject(GIT_BLOB, TreeMap.class);
         removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
+        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
+        List<String> workingDirFiles = plainFilenamesIn(CWD);
+        for (String fileName : workingDirFiles) {
+            File concreteFile = join(CWD, fileName);
+            // Untracked file will be written.
+            String blobId = sha1(fileName, readContents(concreteFile));
+            if (!(blobs.containsKey(blobId) || stageArea.containsKey(blobId))) {
+                System.out.println("There is an untracked file in the way;"
+                        + "delete it, or add and commit it first.");
+                System.exit(0);
+            }
+        }
+        if (!stageArea.isEmpty() || !removedSets.isEmpty()) {
+            System.out.println("You have uncommitted changes.");
+            System.exit(0);
+        }
         if (!branchNames.contains(branchName)) {
             System.out.println("A branch with that name does not exist.");
             System.exit(0);
@@ -541,8 +566,6 @@ public class Repository {
             System.out.println("Cannot merge a branch with itself.");
             System.exit(0);
         }
-
-
         Commit currBranch = readObject(join(GIT_BRANCH_DIR, currBranchName), Commit.class);
         Commit givenBranch = readObject(join(GIT_BRANCH_DIR, branchName), Commit.class);
         // If find split point, it will return the object otherwise return null.
@@ -563,10 +586,140 @@ public class Repository {
             System.out.println("Current branch fast-forwarded.");
             System.exit(0);
         }
-        // TODO: If there are staged additions or removals present, print the error message You have uncommitted changes.
-        // TODO: If an untracked file in the current commit would be overwritten or deleted by the merge, print message.
-        // TODO: the split point was not the current branch or the given branch, merge automatically commits with the log message
-        // TODO:  if the merge encountered a conflict, print the message
+        // Get tracked blobs mapping <BlobId, Content>.
+        TreeMap<String, byte[]> currBranchTracks = new TreeMap<>();
+        TreeMap<String, byte[]> givenBranchTracks = new TreeMap<>();
+        TreeMap<String, byte[]> splitPointTracks = new TreeMap<>();
+        for (Map.Entry<String, byte[]> entry : blobs.entrySet()) {
+            if (currBranch.getTrack().containsKey(entry.getKey())) {
+                currBranchTracks.put(entry.getKey(), entry.getValue());
+            }
+            if (givenBranch.getTrack().containsKey(entry.getKey())) {
+                givenBranchTracks.put(entry.getKey(), entry.getValue());
+            }
+            if (splitPoint.getTrack().containsKey(entry.getKey())) {
+                splitPointTracks.put(entry.getKey(), entry.getValue());
+            }
+        }
+        // <BlobId, FileName>
+        TreeMap<String, String> currBranchFileNameTracks = currBranch.getTrack();
+        TreeMap<String, String> givenBranchFileNameTracks = givenBranch.getTrack();
+        TreeMap<String, String> splitPointFileNameTracks = splitPoint.getTrack();
+        List<String> allFileNames = new ArrayList<>();
+        boolean conflict = false;
+        getAllFileNames(currBranchFileNameTracks, givenBranchFileNameTracks,
+                splitPointFileNameTracks, allFileNames);
+        for (String fileName : allFileNames) {
+            // If the file does not exist, the blobId will be empty string.
+            String currBlobId = getBlobId(currBranchFileNameTracks, fileName);
+            String givenBlobId = getBlobId(givenBranchFileNameTracks, fileName);
+            String splitBlobId = getBlobId(splitPointFileNameTracks, fileName);
+            boolean currIsPresent = currBranchFileNameTracks.containsValue(fileName);
+            boolean givenIsPresent = givenBranchFileNameTracks.containsValue(fileName);
+            boolean splitPointIsPresent = splitPointFileNameTracks.containsValue(fileName);
+            boolean currModified = false;
+            boolean givenModified = false;
+//            if (currIsPresent && splitPointIsPresent) {
+//                if (!currBlobId.equals(splitBlobId)) {
+//                    currModified = true;
+//                }
+//            }
+//            if (givenIsPresent && splitPointIsPresent) {
+//                if (!givenBlobId.equals(splitBlobId)) {
+//                    givenModified = true;
+//                }
+//            }
+            if (!currBlobId.equals(splitBlobId)) {
+                currModified = true;
+            }
+            if (!givenBlobId.equals(splitBlobId)) {
+                givenModified = true;
+            }
+            byte[] currByteContents = blobs.get(currBlobId);
+            byte[] givenByteContents = blobs.get(givenBlobId);
+            if (!currModified && givenModified && currIsPresent && givenIsPresent && splitPointIsPresent) {
+                // Case 1
+                stageArea.put(givenBlobId, fileName);
+                writeContents(join(CWD, fileName), givenBranchTracks.get(givenBlobId));
+            } else if (currModified && !givenModified && currIsPresent && givenIsPresent && splitPointIsPresent) {
+                // Case 2
+                stageArea.put(currBlobId, fileName);
+            } else if (currModified && givenModified) {
+                // case 3
+                if (currBlobId.equals(givenBlobId)) {
+                    // same ways, Do Not Modified(same)
+                } else if (!currBlobId.equals(givenBlobId)) {
+                    // diff ways, Conflict
+                    conflict = true;
+                    String currContents = currBlobId.equals("")? "": new String(blobs.get(currBlobId));
+                    String givenContents = givenBlobId.equals("")? "": new String(blobs.get(givenBlobId));
+                    String conflictContents = "<<<<<<< HEAD\n" +
+                            currContents + "=======\n" + givenContents + ">>>>>>>\n";
+                    // modified this file.
+                    if (currBranchFileNameTracks.containsValue(fileName)) {
+                        stageArea.put(currBlobId, fileName);
+                    } else {
+                        stageArea.put(givenBlobId, fileName);
+                    }
+                    writeContents(join(CWD, fileName), conflictContents.getBytes());
+//                    blobs.put(currBlobId, conflictContents.getBytes());
+                }
+            } else if (!splitPointIsPresent && !givenIsPresent && currIsPresent) {
+                // case 4
+                stageArea.put(currBlobId, fileName);
+            } else if (!splitPointIsPresent && !currIsPresent && givenIsPresent) {
+                stageArea.put(givenBlobId, fileName);
+                writeContents(join(CWD, fileName), givenBranchTracks.get(givenBlobId));
+                // case 5
+            } else if (!currModified && !givenIsPresent) {
+                // case 6
+                rm(fileName);
+            } else if (!givenModified && !currIsPresent) {
+                // case 7
+                rm(fileName);
+            }
+        }
+        if (conflict) {
+            System.out.println("Encountered a merge conflict.");
+        }
+        writeObject(GIT_STAGE_AREA, stageArea);
+//        writeObject(GIT_BLOB, blobs);
+        String commitMessage = "Merged "+ branchName + " into " + currBranchName + ".";
+        commitMerge(commitMessage, givenBranch.getOwnRef());
+    }
+
+    public static String getBlobId(TreeMap<String, String> Tracks, String fileName) {
+        for (Map.Entry<String, String> entry : Tracks.entrySet()) {
+            String name = entry.getValue();
+            if (fileName.equals(name)) {
+                return entry.getKey();
+            }
+        }
+        return "";
+    }
+
+    public static void getAllFileNames(TreeMap<String, String> currTracks,
+                                       TreeMap<String, String> givenTracks,
+                                       TreeMap<String, String> splitPointTracks,
+                                       List<String> allFileNames) {
+        for (Map.Entry<String, String> entry : currTracks.entrySet()) {
+            String fileName = entry.getValue();
+            if (!allFileNames.contains(fileName)) {
+                allFileNames.add(fileName);
+            }
+        }
+        for (Map.Entry<String, String> entry : givenTracks.entrySet()) {
+            String fileName = entry.getValue();
+            if (!allFileNames.contains(fileName)) {
+                allFileNames.add(fileName);
+            }
+        }
+        for (Map.Entry<String, String> entry : splitPointTracks.entrySet()) {
+            String fileName = entry.getValue();
+            if (!allFileNames.contains(fileName)) {
+                allFileNames.add(fileName);
+            }
+        }
     }
 
     public static Commit findSplitPoint(Commit currBranch, Commit givenBranch) {
