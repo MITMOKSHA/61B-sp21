@@ -109,12 +109,12 @@ public class Repository {
         /* If the current working version of the file
          is identical to the version in the current commit
          */
-        if (head.getTrack().containsKey(blobId)) {
+//        if (head.getTrack().containsKey(blobId)) {
             // If the blob is contained in stage area, remove it from stage area.
-            if (stageForAddition.containsKey(blobId)) {
-                stageForAddition.remove(blobId);
-            }
-        } else {
+//            if (stageForAddition.containsKey(blobId)) {
+//                stageForAddition.remove(blobId);
+//            }
+        if (!head.getTrack().containsKey(blobId)) {
             //  Otherwise, add the mapping filename to blob into stage area.
             stageForAddition.put(blobId, filename);
             // add the Blob according to blobId into blobs.
@@ -192,7 +192,7 @@ public class Repository {
                 Commit.class);
         TreeMap<String, String> tracks = head.getTrack();
 
-        // If the file currently in the stage area.
+        // If the file currently stage for addition.
         if (stageForAddition.containsValue(filename)) {
             for (Map.Entry<String, String> entry : stageForAddition.entrySet()) {
                 // entry.getValue() get filename.
@@ -337,7 +337,7 @@ public class Repository {
             // Untracked file will be written.
             String blobId = sha1(fileName, readContents(concreteFile));
             // If commit not track and not add this file to stage area.
-            if (!(blobs.containsKey(blobId) || stageForAddition.containsKey(blobId)
+            if (!(stageForAddition.containsKey(blobId)
                 || tracks.containsValue(fileName))) {
                 System.out.println(fileName);
             }
@@ -404,9 +404,9 @@ public class Repository {
             // Traverse current directory files.
             for (String fileName : currentDirFileNames) {
                 File concreteFile = join(CWD, fileName);
-                // Untracked file will be written.
                 String blobId = sha1(fileName, readContents(concreteFile));
-                if (!(blobs.containsKey(blobId) || stageForAddition.containsKey(blobId))) {
+                if (!(tracks.containsKey(blobId) || stageForAddition.containsKey(blobId)
+                        || stageForRemoval.containsKey(blobId))) {
                     System.out.println("There is an untracked file in the way; "
                             + "delete it, or add and commit it first.");
                     System.exit(0);
