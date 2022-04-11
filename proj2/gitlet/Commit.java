@@ -32,7 +32,7 @@ public class Commit implements Serializable {
     private String secondParentRef;
 
     /* fill in the rest of this class. */
-    public Commit(String message, TreeMap<String, String> stageArea,
+    public Commit(String message, TreeMap<String, String> tracks,
                   String parentRef, String secondParentRef) {
 //        UTC
 //        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -40,7 +40,7 @@ public class Commit implements Serializable {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE MMM dd HH:mm:ss yyyy Z");
         this.message = message;
         this.timeStamp = ZonedDateTime.now().format(formatter);
-        this.blobMapToFileName = stageArea;
+        this.blobMapToFileName = tracks;
         this.parentRef = parentRef;
         this.secondParentRef = secondParentRef;
         this.ownRef = Utils.sha1(Utils.serialize(this));
@@ -62,6 +62,15 @@ public class Commit implements Serializable {
     // set current commit parentRef as m.parentRef
     public void setParentRef(String ref) {
         this.parentRef = ref;
+    }
+
+    public void addPreviousCommitTrack(TreeMap<String, String> previousCommitTrack,
+                                       TreeMap<String, String> newCommitTrack) {
+        for (Map.Entry<String, String> entry : previousCommitTrack.entrySet()) {
+            if (!newCommitTrack.containsValue(entry.getValue())) {
+                this.blobMapToFileName.put(entry.getKey(), entry.getValue());
+            }
+        }
     }
 
     public void removeTracks(TreeMap<String, String> tracksToRemove) {

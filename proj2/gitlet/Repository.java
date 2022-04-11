@@ -4,6 +4,7 @@ package gitlet;
 import com.sun.source.tree.Tree;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TransferQueue;
 
@@ -32,13 +33,13 @@ public class Repository {
     /** The .gitlet directory. */
     public static final File GITLET_DIR = join(CWD, ".gitlet");
     public static final File GIT_HEADS_DIR = join(GITLET_DIR, "heads");
-    public static final File GIT_STAGE_AREA = join(GITLET_DIR, "index");  // Stage area.
+    public static final File GIT_STAGE_FOR_ADD = join(GITLET_DIR, "stage_for_add");  // Stage area.
     public static final File GIT_OBJECTS_DIR = join(GITLET_DIR, "objects");
     public static final File GIT_REMOVE_TRACK = join(GITLET_DIR, "removed_track");
     public static final File GIT_BLOB = join(GITLET_DIR, "blobs");
     public static final File GIT_BRANCH_DIR = join(GITLET_DIR, "branches");
     public static final File GIT_SHORT_ID_DIR = join(GITLET_DIR, "short_ids");
-    private static TreeMap<String, String> stageArea = new TreeMap<>();  // stage area.
+    private static TreeMap<String, String> stageForAddition = new TreeMap<>();  // stage area.
     private static TreeMap<String, byte[]> blobs = new TreeMap<>();  // blobs.
     private static TreeMap<String, String> removedSets = new TreeMap<>();
 
@@ -56,7 +57,7 @@ public class Repository {
 
         // Read the sha-1 string value of branch head into refs/head
         File head = join(GIT_HEADS_DIR, "master");
-        Commit m = new Commit("initial commit", stageArea, null, null);
+        Commit m = new Commit("initial commit", stageForAddition, null, null);
         // serialize the object to byte stream and store it into master file.
         writeObject(head, m);
 
@@ -75,7 +76,7 @@ public class Repository {
 
 
         // Initialize.
-        writeObject(GIT_STAGE_AREA, stageArea);
+        writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
         writeObject(GIT_BLOB, blobs);
         writeObject(GIT_REMOVE_TRACK, removedSets);
     }
@@ -92,16 +93,17 @@ public class Repository {
         // deserialize the byte stream to Commit object and align to head commit object.
         Commit head = readObject(join(GIT_HEADS_DIR, plainFilenamesIn(GIT_HEADS_DIR).get(0)),
                 Commit.class);
-        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
+        stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
 
         removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
-        // If current added file is in the removed sets, it will not be stored in blobs.
+        // If current added file is in the removed sets, it will not be stored for removal.
         if (removedSets.containsKey(blobId)) {
             removedSets.remove(blobId);
             // remove blob from blobs set.
-            blobs = readObject(GIT_BLOB, TreeMap.class);
-            blobs.remove(blobId);
-            writeObject(GIT_BLOB, blobs);
+            // TODO :modified
+//            blobs = readObject(GIT_BLOB, TreeMap.class);
+//            blobs.remove(blobId);
+//            writeObject(GIT_BLOB, blobs);
             writeObject(GIT_REMOVE_TRACK, removedSets);
         }
 
@@ -110,8 +112,8 @@ public class Repository {
          */
         if (head.getTrack().containsKey(blobId)) {
             // If the blob is contained in stage area, remove it from stage area.
-            if (stageArea.containsKey(blobId)) {
-                stageArea.remove(blobId);
+            if (stageForAddition.containsKey(blobId)) {
+                stageForAddition.remove(blobId);
                 // TODO
 //                blobs = readObject(GIT_BLOB, TreeMap.class);
 //                blobs.remove(blobId);  // delete from blobs.
@@ -119,7 +121,7 @@ public class Repository {
             }
         } else {
             //  Otherwise, add the mapping filename to blob into stage area.
-            stageArea.put(blobId, filename);
+            stageForAddition.put(blobId, filename);
             // add the Blob according to blobId into blobs.
             blobs = readObject(GIT_BLOB, TreeMap.class);
             blobs.put(blobId, readContents(in));  // Add blob into blobs.
@@ -127,7 +129,7 @@ public class Repository {
             writeObject(GIT_BLOB, blobs);
         }
         // Write back to .gitlet/stage file.
-        writeObject(GIT_STAGE_AREA, stageArea);
+        writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
     }
 
     @SuppressWarnings("unchecked")  // ignore warning
@@ -140,11 +142,11 @@ public class Repository {
         // Read removed set.
         removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
         // Read stage.
-        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
+        stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
         // Current branch name.
         String currentBranchName = plainFilenamesIn(GIT_HEADS_DIR).get(0);
         // If no files have been staged, print message and abort.
-        if (stageArea.isEmpty() && removedSets.isEmpty()) {
+        if (stageForAddition.isEmpty() && removedSets.isEmpty()) {
             System.out.println("No changes added to the commit.");
             System.exit(0);
         }
@@ -153,18 +155,15 @@ public class Repository {
             return;
         }
 
-        Commit newCommit = new Commit(message, stageArea, null, secondParentRef);
+        Commit newCommit = new Commit(message, stageForAddition, null, secondParentRef);
         Commit head = readObject(join(GIT_HEADS_DIR, currentBranchName), Commit.class);
 
-        // Add the previous commit tracks into current commit.
-//        newCommit.addPreviousCommitTrack(head.getTrack());
+        // Add the previous commit tracks current commit doesn't have into current commit.
+        newCommit.addPreviousCommitTrack(head.getTrack(), newCommit.getTrack());
 
         // If removed set is not empty, remove from current Commit. And then clear it.
         if (!removedSets.isEmpty()) {
             newCommit.removeTracks(removedSets);
-            removedSets.clear();
-            // Update removed set.
-            writeObject(GIT_REMOVE_TRACK, removedSets);
         }
 
         newCommit.setParentRef(head.getOwnRef());  // set current commit as the new commit parent.
@@ -180,34 +179,38 @@ public class Repository {
         String shaId = newCommit.getOwnRef();
         writeObject(join(GIT_OBJECTS_DIR, shaId), newCommit);
         writeObject(join(GIT_SHORT_ID_DIR, shaId.substring(0, 8)), newCommit);
+
         // Clear stage area after commit.
-        stageArea.clear();
+        stageForAddition.clear();
         // update stage area.
-        writeObject(GIT_STAGE_AREA, stageArea);
+        writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
+        removedSets.clear();
+        // Update removed set.
+        writeObject(GIT_REMOVE_TRACK, removedSets);
     }
 
     @SuppressWarnings("unchecked")  // ignore warning
     public static void rm(String filename) {
-        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
+        stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
         blobs = readObject(GIT_BLOB, TreeMap.class);
         Commit head = readObject(join(GIT_HEADS_DIR, plainFilenamesIn(GIT_HEADS_DIR).get(0)),
                 Commit.class);
         TreeMap<String, String> tracks = head.getTrack();
 
         // If the file currently in the stage area.
-        if (stageArea.containsValue(filename)) {
-            for (Map.Entry<String, String> entry : stageArea.entrySet()) {
+        if (stageForAddition.containsValue(filename)) {
+            for (Map.Entry<String, String> entry : stageForAddition.entrySet()) {
                 // entry.getValue() get filename.
                 if (entry.getValue().equals(filename)) {
                     // entry.getKey() get the concrete blobId.
-                    stageArea.remove(entry.getKey());  // Remove the blob from stage area.
+                    stageForAddition.remove(entry.getKey());  // Remove the blob from stage area.
                 }
             }
         } else {
             /* If the file is neither tracked by the head commit nor stage in stage area.
             Print error message.
             */
-            if (!head.getTrack().containsValue(filename)) {
+            if (!tracks.containsValue(filename)) {
                 System.out.println("No reason to remove the file.");
                 System.exit(0);
             } else {  // tracked
@@ -223,8 +226,8 @@ public class Repository {
                 }
             }
         }
-        // update stageArea.
-        writeObject(GIT_STAGE_AREA, stageArea);
+        // update stageForAddition.
+        writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
     }
 
     public static void log() {
@@ -292,8 +295,8 @@ public class Repository {
         System.out.println();
 
         System.out.println("=== Staged Files ===");
-        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
-        for (Map.Entry<String, String> entry : stageArea.entrySet()) {
+        stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
+        for (Map.Entry<String, String> entry : stageForAddition.entrySet()) {
             // Print filename.
             System.out.println(entry.getValue());
         }
@@ -323,7 +326,7 @@ public class Repository {
 //            // Untracked file will be written.
 //            String blobId = sha1(fileName, readContents(concreteFile));
 //            // If commit not track and not add this file to stage area.
-//            if (!(blobs.containsKey(blobId) || stageArea.containsKey(blobId))) {
+//            if (!(blobs.containsKey(blobId) || stageForAddition.containsKey(blobId))) {
 //                System.out.println(fileName);
 //            }
 //        }
@@ -337,7 +340,7 @@ public class Repository {
         TreeMap<String, String> tracks = currCommit.getTrack();
         List<String> branches = plainFilenamesIn(GIT_BRANCH_DIR);
         // Get the tracked file of head commit object.
-        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
+        stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
         blobs = readObject(GIT_BLOB, TreeMap.class);
         if (args.length == 3) {  // checkout -- fileName
             String fileName = args[2];
@@ -391,7 +394,7 @@ public class Repository {
                 File concreteFile = join(CWD, fileName);
                 // Untracked file will be written.
                 String blobId = sha1(fileName, readContents(concreteFile));
-                if (!(blobs.containsKey(blobId) || stageArea.containsKey(blobId))) {
+                if (!(blobs.containsKey(blobId) || stageForAddition.containsKey(blobId))) {
                     System.out.println("There is an untracked file in the way; "
                             + "delete it, or add and commit it first.");
                     System.exit(0);
@@ -407,7 +410,7 @@ public class Repository {
                 writeContents(join(CWD, fileName), fileContentTrackedByCommit);
             }
             branchSwitch(branchName, currentBranchName);
-            clearStageArea();
+            clearstageForAddition();
         }
     }
 
@@ -444,11 +447,11 @@ public class Repository {
     }
 
     @SuppressWarnings("unchecked")  // ignore warning
-    public static void clearStageArea() {
+    public static void clearstageForAddition() {
         // clear stage Area after branch checkout.
-        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
-        stageArea.clear();
-        writeObject(GIT_STAGE_AREA, stageArea);
+        stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
+        stageForAddition.clear();
+        writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
     }
 
     public static void branch(String branchName) {
@@ -487,7 +490,7 @@ public class Repository {
     public static void reset(String commitId) {
         List<String> commitIds = plainFilenamesIn(GIT_OBJECTS_DIR);
         String currentBranchName = plainFilenamesIn(GIT_BRANCH_DIR).get(0);
-        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
+        stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
         blobs = readObject(GIT_BLOB, TreeMap.class);
         if (!commitIds.contains(commitId)) {
             System.out.println("No commit with that id exists.");
@@ -502,7 +505,7 @@ public class Repository {
             File concreteFile = join(CWD, fileName);
             // Untracked file will be written.
             String blobId = sha1(fileName, readContents(concreteFile));
-            if (!(blobs.containsKey(blobId) || stageArea.containsKey(blobId))) {
+            if (!(blobs.containsKey(blobId) || stageForAddition.containsKey(blobId))) {
                 System.out.println("There is an untracked file in the way;"
                         + "delete it, or add and commit it first.");
                 System.exit(0);
@@ -531,9 +534,9 @@ public class Repository {
         writeObject(join(GIT_BRANCH_DIR, currentBranchName), concreteCommit);
 
         // clear stage Area after branch checkout.
-        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
-        stageArea.clear();
-        writeObject(GIT_STAGE_AREA, stageArea);
+        stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
+        stageForAddition.clear();
+        writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
     }
 
     @SuppressWarnings("unchecked")  // ignore warning
@@ -542,19 +545,19 @@ public class Repository {
         List<String> branchNames = plainFilenamesIn(GIT_BRANCH_DIR);
         blobs = readObject(GIT_BLOB, TreeMap.class);
         removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
-        stageArea = readObject(GIT_STAGE_AREA, TreeMap.class);
+        stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
         List<String> workingDirFiles = plainFilenamesIn(CWD);
         for (String fileName : workingDirFiles) {
             File concreteFile = join(CWD, fileName);
             // Untracked file will be written.
             String blobId = sha1(fileName, readContents(concreteFile));
-            if (!(blobs.containsKey(blobId) || stageArea.containsKey(blobId))) {
+            if (!(blobs.containsKey(blobId) || stageForAddition.containsKey(blobId))) {
                 System.out.println("There is an untracked file in the way;"
                         + "delete it, or add and commit it first.");
                 System.exit(0);
             }
         }
-        if (!stageArea.isEmpty() || !removedSets.isEmpty()) {
+        if (!stageForAddition.isEmpty() || !removedSets.isEmpty()) {
             System.out.println("You have uncommitted changes.");
             System.exit(0);
         }
@@ -577,12 +580,12 @@ public class Repository {
         }
         // TODO: If split point is given branch, print message and terminate.
         // If the split point is the same commit as the given branch, then we do nothing
-        if (splitPoint.equals(givenBranch)) {
+        if (splitPoint.getOwnRef().equals(givenBranch.getOwnRef())) {
             System.out.println("Given branch is an ancestor of the current branch.");
             System.exit(0);
         }
         // TODO: If split point is current branch, print message and terminate.
-        if (splitPoint.equals(currBranch)) {
+        if (splitPoint.getOwnRef().equals(currBranch.getOwnRef())) {
             System.out.println("Current branch fast-forwarded.");
             System.exit(0);
         }
@@ -619,16 +622,6 @@ public class Repository {
             boolean splitPointIsPresent = splitPointFileNameTracks.containsValue(fileName);
             boolean currModified = false;
             boolean givenModified = false;
-//            if (currIsPresent && splitPointIsPresent) {
-//                if (!currBlobId.equals(splitBlobId)) {
-//                    currModified = true;
-//                }
-//            }
-//            if (givenIsPresent && splitPointIsPresent) {
-//                if (!givenBlobId.equals(splitBlobId)) {
-//                    givenModified = true;
-//                }
-//            }
             if (!currBlobId.equals(splitBlobId)) {
                 currModified = true;
             }
@@ -639,11 +632,11 @@ public class Repository {
             byte[] givenByteContents = blobs.get(givenBlobId);
             if (!currModified && givenModified && currIsPresent && givenIsPresent && splitPointIsPresent) {
                 // Case 1
-                stageArea.put(givenBlobId, fileName);
+                stageForAddition.put(givenBlobId, fileName);
                 writeContents(join(CWD, fileName), givenBranchTracks.get(givenBlobId));
             } else if (currModified && !givenModified && currIsPresent && givenIsPresent && splitPointIsPresent) {
                 // Case 2
-                stageArea.put(currBlobId, fileName);
+                stageForAddition.put(currBlobId, fileName);
             } else if (currModified && givenModified) {
                 // case 3
                 if (currBlobId.equals(givenBlobId)) {
@@ -656,19 +649,17 @@ public class Repository {
                     String conflictContents = "<<<<<<< HEAD\n" +
                             currContents + "=======\n" + givenContents + ">>>>>>>\n";
                     // modified this file.
-                    if (currBranchFileNameTracks.containsValue(fileName)) {
-                        stageArea.put(currBlobId, fileName);
-                    } else {
-                        stageArea.put(givenBlobId, fileName);
-                    }
-                    writeContents(join(CWD, fileName), conflictContents.getBytes());
+                    byte[] conflictContentsByte = conflictContents.getBytes();
+                    String newBlobId = sha1(fileName, conflictContentsByte);
+                    stageForAddition.put(newBlobId, fileName);
+                    writeContents(join(CWD, fileName), conflictContentsByte);
 //                    blobs.put(currBlobId, conflictContents.getBytes());
                 }
             } else if (!splitPointIsPresent && !givenIsPresent && currIsPresent) {
                 // case 4
-                stageArea.put(currBlobId, fileName);
+                stageForAddition.put(currBlobId, fileName);
             } else if (!splitPointIsPresent && !currIsPresent && givenIsPresent) {
-                stageArea.put(givenBlobId, fileName);
+                stageForAddition.put(givenBlobId, fileName);
                 writeContents(join(CWD, fileName), givenBranchTracks.get(givenBlobId));
                 // case 5
             } else if (!currModified && !givenIsPresent) {
@@ -676,13 +667,13 @@ public class Repository {
                 rm(fileName);
             } else if (!givenModified && !currIsPresent) {
                 // case 7
-                rm(fileName);
+//                rm(fileName);
             }
         }
         if (conflict) {
             System.out.println("Encountered a merge conflict.");
         }
-        writeObject(GIT_STAGE_AREA, stageArea);
+        writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
 //        writeObject(GIT_BLOB, blobs);
         String commitMessage = "Merged "+ branchName + " into " + currBranchName + ".";
         commitMerge(commitMessage, givenBranch.getOwnRef());
