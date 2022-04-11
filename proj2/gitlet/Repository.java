@@ -39,13 +39,13 @@ public class Repository {
     public static final File GIT_HEADS_DIR = join(GITLET_DIR, "heads");
     public static final File GIT_STAGE_FOR_ADD = join(GITLET_DIR, "stage_for_add");  // Stage area.
     public static final File GIT_OBJECTS_DIR = join(GITLET_DIR, "objects");
-    public static final File GIT_REMOVE_TRACK = join(GITLET_DIR, "removed_track");
+    public static final File GIT_STAGE_FOR_REMOVE = join(GITLET_DIR, "stage_for_remove");
     public static final File GIT_BLOB = join(GITLET_DIR, "blobs");
     public static final File GIT_BRANCH_DIR = join(GITLET_DIR, "branches");
     public static final File GIT_SHORT_ID_DIR = join(GITLET_DIR, "short_ids");
     private static TreeMap<String, String> stageForAddition = new TreeMap<>();  // stage area.
     private static TreeMap<String, byte[]> blobs = new TreeMap<>();  // blobs.
-    private static TreeMap<String, String> removedSets = new TreeMap<>();
+    private static TreeMap<String, String> stageForRemoval = new TreeMap<>();
 
 
     /* fill in the rest of this class. */
@@ -82,7 +82,7 @@ public class Repository {
         // Initialize.
         writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
         writeObject(GIT_BLOB, blobs);
-        writeObject(GIT_REMOVE_TRACK, removedSets);
+        writeObject(GIT_STAGE_FOR_REMOVE, stageForRemoval);
     }
 
     @SuppressWarnings("unchecked")  // ignore warning
@@ -99,11 +99,11 @@ public class Repository {
                 Commit.class);
         stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
 
-        removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
+        stageForRemoval = readObject(GIT_STAGE_FOR_REMOVE, TreeMap.class);
         // If current added file is in the removed sets, it will not be stored for removal.
-        if (removedSets.containsKey(blobId)) {
-            removedSets.remove(blobId);
-            writeObject(GIT_REMOVE_TRACK, removedSets);
+        if (stageForRemoval.containsKey(blobId)) {
+            stageForRemoval.remove(blobId);
+            writeObject(GIT_STAGE_FOR_REMOVE, stageForRemoval);
         }
 
         /* If the current working version of the file
@@ -135,13 +135,13 @@ public class Repository {
     @SuppressWarnings("unchecked")  // ignore warning
     public static void commitMerge(String message, String secondParentRef) {
         // Read removed set.
-        removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
+        stageForRemoval = readObject(GIT_STAGE_FOR_REMOVE, TreeMap.class);
         // Read stage.
         stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
         // Current branch name.
         String currentBranchName = plainFilenamesIn(GIT_HEADS_DIR).get(0);
         // If no files have been staged, print message and abort.
-        if (stageForAddition.isEmpty() && removedSets.isEmpty()) {
+        if (stageForAddition.isEmpty() && stageForRemoval.isEmpty()) {
             System.out.println("No changes added to the commit.");
             System.exit(0);
         }
@@ -157,8 +157,8 @@ public class Repository {
         newCommit.addPreviousCommitTrack(head.getTrack(), newCommit.getTrack());
 
         // If removed set is not empty, remove from current Commit. And then clear it.
-        if (!removedSets.isEmpty()) {
-            newCommit.removeTracks(removedSets);
+        if (!stageForRemoval.isEmpty()) {
+            newCommit.removeTracks(stageForRemoval);
         }
 
         newCommit.setParentRef(head.getOwnRef());  // set current commit as the new commit parent.
@@ -179,9 +179,9 @@ public class Repository {
         stageForAddition.clear();
         // update stage area.
         writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
-        removedSets.clear();
+        stageForRemoval.clear();
         // Update removed set.
-        writeObject(GIT_REMOVE_TRACK, removedSets);
+        writeObject(GIT_STAGE_FOR_REMOVE, stageForRemoval);
     }
 
     @SuppressWarnings("unchecked")  // ignore warning
@@ -209,12 +209,12 @@ public class Repository {
                 System.out.println("No reason to remove the file.");
                 System.exit(0);
             } else {  // tracked
-                removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
+                stageForRemoval = readObject(GIT_STAGE_FOR_REMOVE, TreeMap.class);
                 for (Map.Entry<String, String> entry : tracks.entrySet()) {
                     // add track to the list to be removed.
                     if (entry.getValue().equals(filename)) {
-                        removedSets.put(entry.getKey(), filename);
-                        writeObject(GIT_REMOVE_TRACK, removedSets);
+                        stageForRemoval.put(entry.getKey(), filename);
+                        writeObject(GIT_STAGE_FOR_REMOVE, stageForRemoval);
                         // Do not remove it unless it is tracked in the current commit.
                         restrictedDelete(join(CWD, filename));  // delete file
                     }
@@ -298,8 +298,8 @@ public class Repository {
         System.out.println();
 
         System.out.println("=== Removed Files ===");
-        removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
-        for (Map.Entry<String, String> entry : removedSets.entrySet()) {
+        stageForRemoval = readObject(GIT_STAGE_FOR_REMOVE, TreeMap.class);
+        for (Map.Entry<String, String> entry : stageForRemoval.entrySet()) {
             // Print filename.
             System.out.println(entry.getValue());
         }
@@ -314,7 +314,7 @@ public class Repository {
         System.out.println("=== Modifications Not Staged For Commit ===");
         for (Map.Entry<String, String> entry : tracks.entrySet()) {
             File f = join(CWD, entry.getValue());
-            if (!f.exists() && !removedSets.containsKey(entry.getKey())) {
+            if (!f.exists() && !stageForRemoval.containsKey(entry.getKey())) {
                 System.out.println(entry.getValue() + " (deleted)");
             }
         }
@@ -552,7 +552,7 @@ public class Repository {
         String currBranchName = plainFilenamesIn(GIT_HEADS_DIR).get(0);
         List<String> branchNames = plainFilenamesIn(GIT_BRANCH_DIR);
         blobs = readObject(GIT_BLOB, TreeMap.class);
-        removedSets = readObject(GIT_REMOVE_TRACK, TreeMap.class);
+        stageForRemoval = readObject(GIT_STAGE_FOR_REMOVE, TreeMap.class);
         stageForAddition = readObject(GIT_STAGE_FOR_ADD, TreeMap.class);
         List<String> workingDirFiles = plainFilenamesIn(CWD);
         for (String fileName : workingDirFiles) {
@@ -565,7 +565,7 @@ public class Repository {
                 System.exit(0);
             }
         }
-        if (!stageForAddition.isEmpty() || !removedSets.isEmpty()) {
+        if (!stageForAddition.isEmpty() || !stageForRemoval.isEmpty()) {
             System.out.println("You have uncommitted changes.");
             System.exit(0);
         }
