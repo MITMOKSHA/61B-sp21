@@ -1,12 +1,16 @@
 package gitlet;
 
 
-import com.sun.source.tree.Tree;
 
 import java.io.File;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.TransferQueue;
+import java.util.TreeMap;
+import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Queue;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.LinkedList;
 
 import static gitlet.Utils.*;
 
@@ -99,11 +103,6 @@ public class Repository {
         // If current added file is in the removed sets, it will not be stored for removal.
         if (removedSets.containsKey(blobId)) {
             removedSets.remove(blobId);
-            // remove blob from blobs set.
-            // TODO :modified
-//            blobs = readObject(GIT_BLOB, TreeMap.class);
-//            blobs.remove(blobId);
-//            writeObject(GIT_BLOB, blobs);
             writeObject(GIT_REMOVE_TRACK, removedSets);
         }
 
@@ -114,10 +113,6 @@ public class Repository {
             // If the blob is contained in stage area, remove it from stage area.
             if (stageForAddition.containsKey(blobId)) {
                 stageForAddition.remove(blobId);
-                // TODO
-//                blobs = readObject(GIT_BLOB, TreeMap.class);
-//                blobs.remove(blobId);  // delete from blobs.
-//                writeObject(GIT_BLOB, blobs);
             }
         } else {
             //  Otherwise, add the mapping filename to blob into stage area.
@@ -463,10 +458,6 @@ public class Repository {
         String currentBranchName = plainFilenamesIn(GIT_HEADS_DIR).get(0);
         // read the current head to update corresponding branch.
         Commit head = readObject(join(GIT_HEADS_DIR, currentBranchName), Commit.class);
-        // Update branch information in branches/ dir.
-//        writeObject(join(GIT_BRANCH_DIR, currentBranchName), head);
-
-//        Commit newBranch = head;
         // create new branch.
         writeObject(join(GIT_BRANCH_DIR, branchName), head);
     }
@@ -578,15 +569,15 @@ public class Repository {
             System.out.println("Does not find split point.");
             System.exit(0);
         }
-        // TODO: If split point is given branch, print message and terminate.
         // If the split point is the same commit as the given branch, then we do nothing
         if (splitPoint.getOwnRef().equals(givenBranch.getOwnRef())) {
             System.out.println("Given branch is an ancestor of the current branch.");
             System.exit(0);
         }
-        // TODO: If split point is current branch, print message and terminate.
         if (splitPoint.getOwnRef().equals(currBranch.getOwnRef())) {
+            String[] command = {"checkout", branchName};
             System.out.println("Current branch fast-forwarded.");
+            checkout(command);
             System.exit(0);
         }
         // Get tracked blobs mapping <BlobId, Content>.
@@ -604,6 +595,17 @@ public class Repository {
                 splitPointTracks.put(entry.getKey(), entry.getValue());
             }
         }
+        judgeMergeCase(currBranch, givenBranch, splitPoint, givenBranchTracks);
+        writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
+        writeObject(GIT_BLOB, blobs);
+        String commitMessage = "Merged " + branchName + " into " + currBranchName + ".";
+        commitMerge(commitMessage, givenBranch.getOwnRef());
+    }
+
+    public static void judgeMergeCase(Commit currBranch,
+                                      Commit givenBranch,
+                                      Commit splitPoint,
+                                      TreeMap<String, byte[]> givenBranchTracks) {
         // <BlobId, FileName>
         TreeMap<String, String> currBranchFileNameTracks = currBranch.getTrack();
         TreeMap<String, String> givenBranchFileNameTracks = givenBranch.getTrack();
@@ -628,32 +630,33 @@ public class Repository {
             if (!givenBlobId.equals(splitBlobId)) {
                 givenModified = true;
             }
-            byte[] currByteContents = blobs.get(currBlobId);
-            byte[] givenByteContents = blobs.get(givenBlobId);
-            if (!currModified && givenModified && currIsPresent && givenIsPresent && splitPointIsPresent) {
+            if (!currModified && givenModified
+                    && currIsPresent && givenIsPresent && splitPointIsPresent) {
                 // Case 1
                 stageForAddition.put(givenBlobId, fileName);
                 writeContents(join(CWD, fileName), givenBranchTracks.get(givenBlobId));
-            } else if (currModified && !givenModified && currIsPresent && givenIsPresent && splitPointIsPresent) {
+            } else if (currModified && !givenModified
+                    && currIsPresent && givenIsPresent && splitPointIsPresent) {
                 // Case 2
                 stageForAddition.put(currBlobId, fileName);
             } else if (currModified && givenModified) {
                 // case 3
-                if (currBlobId.equals(givenBlobId)) {
-                    // same ways, Do Not Modified(same)
-                } else if (!currBlobId.equals(givenBlobId)) {
+                // same ways, Do Not Modified(same)
+                if (!currBlobId.equals(givenBlobId)) {
                     // diff ways, Conflict
                     conflict = true;
-                    String currContents = currBlobId.equals("")? "": new String(blobs.get(currBlobId));
-                    String givenContents = givenBlobId.equals("")? "": new String(blobs.get(givenBlobId));
-                    String conflictContents = "<<<<<<< HEAD\n" +
-                            currContents + "=======\n" + givenContents + ">>>>>>>\n";
+                    String currContents = currBlobId.equals("") ? ""
+                            : new String(blobs.get(currBlobId));
+                    String givenContents = givenBlobId.equals("") ? ""
+                            : new String(blobs.get(givenBlobId));
+                    String conflictContents = "<<<<<<< HEAD\n"
+                            + currContents + "=======\n" + givenContents + ">>>>>>>\n";
                     // modified this file.
                     byte[] conflictContentsByte = conflictContents.getBytes();
                     String newBlobId = sha1(fileName, conflictContentsByte);
                     stageForAddition.put(newBlobId, fileName);
+                    blobs.put(newBlobId, conflictContentsByte);
                     writeContents(join(CWD, fileName), conflictContentsByte);
-//                    blobs.put(currBlobId, conflictContents.getBytes());
                 }
             } else if (!splitPointIsPresent && !givenIsPresent && currIsPresent) {
                 // case 4
@@ -665,22 +668,16 @@ public class Repository {
             } else if (!currModified && !givenIsPresent) {
                 // case 6
                 rm(fileName);
-            } else if (!givenModified && !currIsPresent) {
-                // case 7
-//                rm(fileName);
+//            } else if (!givenModified && !currIsPresent) {  // Not need to handle it.
             }
         }
         if (conflict) {
             System.out.println("Encountered a merge conflict.");
         }
-        writeObject(GIT_STAGE_FOR_ADD, stageForAddition);
-//        writeObject(GIT_BLOB, blobs);
-        String commitMessage = "Merged "+ branchName + " into " + currBranchName + ".";
-        commitMerge(commitMessage, givenBranch.getOwnRef());
     }
 
-    public static String getBlobId(TreeMap<String, String> Tracks, String fileName) {
-        for (Map.Entry<String, String> entry : Tracks.entrySet()) {
+    public static String getBlobId(TreeMap<String, String> tracks, String fileName) {
+        for (Map.Entry<String, String> entry : tracks.entrySet()) {
             String name = entry.getValue();
             if (fileName.equals(name)) {
                 return entry.getKey();
@@ -722,7 +719,7 @@ public class Repository {
         que.add(currBranch);
         while (!que.isEmpty()) {
             Commit element = que.poll();  // Get the head element of queue head.
-            currBranchPath.add(element.getOwnRef());  // Add the commit alongside the path to the List.
+            currBranchPath.add(element.getOwnRef());  // Add commit alongside the path to the List.
             if (element.getParentRef() != null) {
                 Commit parent = readObject(join(GIT_OBJECTS_DIR, element.getParentRef()),
                         Commit.class);
@@ -738,7 +735,7 @@ public class Repository {
         que.add(givenBranch);
         while (!que.isEmpty()) {
             Commit element = que.poll();  // Get the head element of queue head.
-            givenBranchPath.add(element.getOwnRef());  // Add the commit alongside the path to the sets.
+            givenBranchPath.add(element.getOwnRef());  // Add commit alongside the path to the sets.
             if (element.getParentRef() != null) {
                 Commit parent = readObject(join(GIT_OBJECTS_DIR, element.getParentRef()),
                         Commit.class);
