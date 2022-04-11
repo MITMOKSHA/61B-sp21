@@ -5,12 +5,12 @@ package gitlet;
 import java.io.File;
 import java.util.TreeMap;
 import java.util.Map;
-import java.util.List;
 import java.util.ArrayList;
-import java.util.Queue;
-import java.util.Set;
-import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.Queue;
 
 import static gitlet.Utils.*;
 
@@ -312,19 +312,36 @@ public class Repository {
         TreeMap<String, String> tracks = headCommit.getTrack();
         // TODO add "Modifications Not Staged For Commit" and "Untracked Files" information.
         System.out.println("=== Modifications Not Staged For Commit ===");
+        for (Map.Entry<String, String> entry : tracks.entrySet()) {
+            File f = join(CWD, entry.getValue());
+            if (!f.exists() && !removedSets.containsKey(entry.getKey())) {
+                System.out.println(entry.getValue() + " (deleted)");
+            }
+        }
+        for (String fileName : filesInDir) {
+            byte[] contents = readContents(join(CWD, fileName));
+            String blobId = sha1(fileName, contents);
+            for (Map.Entry<String, String> entry : tracks.entrySet()) {
+                if (entry.getValue().equals(fileName)
+                    && !entry.getKey().equals(blobId)) {
+                    // modified
+                    System.out.println(fileName + " (modified)");
+                }
+            }
+        }
         System.out.println();
-
         System.out.println("=== Untracked Files ===");
-//        blobs = readObject(GIT_BLOB, TreeMap.class);
-//        for (String fileName : filesInDir) {
-//            File concreteFile = join(CWD, fileName);
-//            // Untracked file will be written.
-//            String blobId = sha1(fileName, readContents(concreteFile));
-//            // If commit not track and not add this file to stage area.
-//            if (!(blobs.containsKey(blobId) || stageForAddition.containsKey(blobId))) {
-//                System.out.println(fileName);
-//            }
-//        }
+        blobs = readObject(GIT_BLOB, TreeMap.class);
+        for (String fileName : filesInDir) {
+            File concreteFile = join(CWD, fileName);
+            // Untracked file will be written.
+            String blobId = sha1(fileName, readContents(concreteFile));
+            // If commit not track and not add this file to stage area.
+            if (!(blobs.containsKey(blobId) || stageForAddition.containsKey(blobId)
+                || tracks.containsValue(fileName))) {
+                System.out.println(fileName);
+            }
+        }
         System.out.println();
     }
 
